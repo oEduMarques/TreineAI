@@ -14,8 +14,9 @@ export function useTraining() {
     page: currentPage(), session: null, busy: false, loading: Boolean(supabase), error: '', notice: '',
     routines: local('routines', copy(demoRoutines)), workouts: local('workouts', demoWorkouts()),
     active: local('active-demo', null), plans: local('plans', []), editor: null,
-    video: null, picker: false, selected: null, login: false, loginMessage: '', email: '', password: '',
-    now: Date.now(), limit: 20, exerciseId: catalog[0].id, planKind: 'training', goal: '', days: 3,
+    video: null, picker: false, selected: null, review: false, login: false, loginMessage: '', email: '', password: '',
+    now: Date.now(), limit: 20, exerciseId: catalog[0].id, progressPeriod: '90', progressMetric: 'best',
+    planKind: 'training', goal: '', days: 3,
     plan: null, status: { aiConfigured: false }, videoFailed: false,
   })
   const key = () => 'active-' + (state.session?.user.id || 'demo')
@@ -25,6 +26,7 @@ export function useTraining() {
     if (event.key !== 'Escape') return
     if (state.video) state.video = null
     else if (state.picker) state.picker = false
+    else if (state.review && !state.busy) state.review = false
     else if (state.selected) state.selected = null
     else state.login = false
   }
@@ -32,7 +34,7 @@ export function useTraining() {
     try { saveLocal(field, value) } catch { state.error = 'O armazenamento deste dispositivo está indisponível.' }
   }
   watch(() => state.active, value => writeLocal(key(),value), { deep: true, flush: 'sync' })
-  watch(() => state.page, () => { state.error = ''; state.notice = '' })
+  watch(() => state.page, () => { state.error = ''; state.notice = ''; state.review = false })
   watch(() => state.video, () => { state.videoFailed = false })
 
   let version = 0
@@ -56,7 +58,7 @@ export function useTraining() {
     const id = ++version
     state.session = session
     state.active = local(key(), null)
-    state.selected = null; state.editor = null; state.plan = null
+    state.selected = null; state.editor = null; state.plan = null; state.review = false
     if (!session) {
       state.routines = local('routines', copy(demoRoutines))
       state.workouts = local('workouts', demoWorkouts())
@@ -130,11 +132,24 @@ export function useTraining() {
   const rest = computed(() => Math.max(0, Math.ceil(((state.active?.timer?.until || 0) - state.now)/1000)))
   const elapsed = computed(() => state.active ? Math.max(0,Math.floor((state.now - Date.parse(state.active.startedAt))/1000)) : 0)
   const doneCount = computed(() => state.active?.exercises.reduce((sum,item) => sum + item.sets.filter(s => s.done).length,0) || 0)
+  const totalSets = computed(() => state.active?.exercises.reduce((sum,item) => sum + item.sets.length,0) || 0)
+  const nextSet = computed(() => {
+    const i = state.active?.exercises.findIndex(item => item.sets.some(set => !set.done)) ?? -1
+    return i < 0 ? '' : i + ':' + state.active.exercises[i].sets.findIndex(set => !set.done)
+  })
+  const recordedVolume = computed(() => state.active ? volume({
+    exercises: state.active.exercises.map(item => ({ sets:item.sets.filter(set => set.done) })),
+  }) : 0)
   const field = computed(() => fields[exercises[state.exerciseId].type][0][0])
+  const volumeMetric = computed(() => field.value === 'weight' && state.progressMetric === 'volume')
   const progress = computed(() => ordered.value.flatMap(workout => {
-    const values = workout.exercises.filter(e => e.exerciseId === state.exerciseId)
-      .flatMap(e => e.sets.filter(s => s.type !== 'warmup').map(s => s[field.value])).filter(Number.isFinite)
-    return values.length ? [{ id:workout.id, date:workout.finishedAt, value:Math.max(...values) }] : []
+    const days = Number(state.progressPeriod)
+    if (days && Date.parse(workout.finishedAt) < Date.now() - days * 86400000) return []
+    const sets = workout.exercises.filter(e => e.exerciseId === state.exerciseId)
+      .flatMap(e => e.sets.filter(s => s.type !== 'warmup'))
+    const values = sets.map(s => volumeMetric.value ? s.weight * s.reps : s[field.value]).filter(Number.isFinite)
+    const value = volumeMetric.value ? values.reduce((sum,n) => sum + n,0) : Math.max(...values)
+    return values.length ? [{ id:workout.id, date:workout.finishedAt, value }] : []
   }))
   const best = computed(() => progress.value.reduce((max,item) => Math.max(max,item.value),0))
   const unit = computed(() => ({ weight:'kg',reps:'reps',seconds:'s',meters:'m' })[field.value])
@@ -142,9 +157,16 @@ export function useTraining() {
     state.editor = source ? copy(source) : { id:uid(),name:'',notes:'',exercises:[] }
     go('rotina')
   }
-  function addExercise(id) {
+  function addExercises(ids) {
     const target = state.page === 'rotina' ? state.editor : state.active
-    target?.exercises.push(blankExercise(id))
+    if (!target) return
+    const additions = [...new Set(ids)].filter(id => Object.hasOwn(exercises,id))
+    if (target.exercises.length + additions.length > 100) {
+      state.error = 'Este treino comporta até 100 exercícios.'
+      state.picker = false
+      return
+    }
+    target.exercises.push(...additions.map(blankExercise))
     state.picker = false
   }
   async function persist(kind, data, field) {
@@ -182,7 +204,13 @@ export function useTraining() {
     const previous = past?.exercises.find(e => e.exerciseId === item.exerciseId)
     const kind = item.sets[index].type
     const position = item.sets.slice(0,index).filter(set => set.type === kind).length
-    return setLabel(previous?.sets.filter(set => set.type === kind)[position])
+    return previous?.sets.filter(set => set.type === kind)[position]
+  }
+  function copyPrevious(item,index) {
+    const source = previous(item,index)
+    const set = item.sets[index]
+    if (!source || set.done) return
+    for (const [field] of fields[exercises[item.exerciseId].type]) set[field] = source[field]
   }
   function mark(item,set,i,j) {
     state.error = ''
@@ -205,9 +233,27 @@ export function useTraining() {
     items.splice(index,1)
     if (target.timer) target.timer = null
   }
+  function moveExercise(target,index,shift) {
+    const next = index + shift
+    if (next < 0 || next >= target.exercises.length) return
+    const timer = target.timer
+    if (timer) {
+      const [exercise,set] = timer.source.split(':').map(Number)
+      if (exercise === index || exercise === next) timer.source = (exercise === index ? next : index) + ':' + set
+    }
+    const items = [...target.exercises]
+    const moved = items[index]
+    items[index] = items[next]
+    items[next] = moved
+    target.exercises = items
+  }
+  function reviewWorkout() {
+    if (!doneCount.value) { state.error = 'Conclua pelo menos uma série para salvar.'; return }
+    state.error = ''
+    state.review = true
+  }
   const finish = () => action(async () => {
     if (!doneCount.value) throw new Error('Conclua pelo menos uma série para salvar.')
-    if (state.active.exercises.some(e => e.sets.some(s => !s.done)) && !confirm('Salvar apenas as séries concluídas?')) return
     const { timer, ...item } = copy(state.active)
     item.name = item.name.trim() || 'Treino livre'
     item.finishedAt = new Date().toISOString()
@@ -219,10 +265,28 @@ export function useTraining() {
   function discard() {
     if (confirm('Descartar o treino em andamento?')) { state.active = null; go('treinar') }
   }
+  const planRequest = () => ({ kind:state.planKind,goal:state.goal.trim(),days_per_week:state.days })
   const generate = () => action(async () => {
-    state.plan = await api('/ai/plans',state.session?.access_token,{
-      method:'POST',body:JSON.stringify({ kind:state.planKind,goal:state.goal.trim(),days_per_week:state.days }),
+    const token = state.session?.access_token
+    const userId = state.session?.user.id
+    const plan = await api('/ai/plans',token,{ method:'POST',body:JSON.stringify(planRequest()) })
+    if (state.session?.user.id === userId) state.plan = plan
+  })
+  const makeBrief = receive => action(async () => {
+    const spec = planRequest()
+    if (spec.goal.length < 10) throw new Error('Descreva seu objetivo em pelo menos 10 caracteres.')
+    const userId = state.session?.user.id
+    const body = JSON.stringify(spec)
+    const result = await api('/ai/brief',state.session?.access_token,{ method:'POST',body })
+    if (state.session?.user.id === userId && JSON.stringify(planRequest()) === body) receive(result.prompt)
+  })
+  const reviewPlan = (text, receive) => action(async () => {
+    const token = state.session?.access_token
+    const userId = state.session?.user.id
+    const plan = await api('/ai/review',token,{
+      method:'POST',body:JSON.stringify({ kind:state.planKind,text }),
     })
+    if (state.session?.user.id === userId) { state.plan = plan; receive() }
   })
   const savePlan = () => action(async () => {
     await persist('plan',{...state.plan,id:uid()},'plans')
@@ -235,6 +299,7 @@ export function useTraining() {
       sets:Array.from({ length:item.sets },() => ({ ...blankSet(),reps:item.reps })),
     })) })
   }
-  return { state,go,signIn,signOut,ordered,week,weekly,rest,elapsed,doneCount,progress,best,unit,
-    edit,addExercise,saveRoutine,begin,previous,mark,remove,finish,discard,generate,savePlan,useDay }
+  return { state,go,signIn,signOut,ordered,week,weekly,rest,elapsed,doneCount,totalSets,nextSet,recordedVolume,progress,best,unit,volumeMetric,
+    edit,addExercises,saveRoutine,begin,previous,copyPrevious,mark,remove,moveExercise,reviewWorkout,finish,discard,
+    generate,makeBrief,reviewPlan,savePlan,useDay }
 }

@@ -134,6 +134,11 @@ class AIRequest(BaseModel):
     days_per_week: int = Field(3, ge=1, le=7)
 
 
+class PlanImport(BaseModel):
+    kind: Literal["training", "nutrition"]
+    text: str = Field(min_length=1, max_length=60000)
+
+
 @asynccontextmanager
 async def lifespan(app):
     async with httpx.AsyncClient(timeout=45, follow_redirects=False) as client:
@@ -217,28 +222,56 @@ async def save_record(request: Request, kind: Kind, record_id: UUID, body: dict,
     return payload
 
 
+PLAN_INSTRUCTIONS = (
+    "Você gera rascunhos de planejamento geral para adultos em português do Brasil. "
+    "Produza apenas JSON válido seguindo o esquema. Use exatamente o tipo e o número de dias solicitados. "
+    "Em treinos, preencha days com os dias e deixe meals vazio. Use apenas IDs do catálogo "
+    "e exercícios coerentes com os equipamentos descritos. Em planos alimentares, preencha meals "
+    "com refeições e listas de alimentos e deixe days vazio. Ofereça sugestões e alternativas, "
+    "respeite alergias informadas e evite prescrição clínica, dietas extremas e metas calóricas rígidas. "
+    "Se a solicitação indicar uma condição de saúde, mantenha a orientação geral e indique avaliação profissional."
+)
+
+
+def plan_context(spec: AIRequest) -> str:
+    catalog = [{"id": e["id"], "name": e["name"], "equipment": e["equipment"]} for e in CATALOG
+               if e["type"] in ("weight_reps", "reps_only")]
+    data = {"kind": spec.kind, "objective": spec.goal, "days_per_week": spec.days_per_week,
+            "catalog": catalog if spec.kind == "training" else [], "schema": PlanContent.model_json_schema()}
+    return json.dumps(data, ensure_ascii=False, indent=2)
+
+
+@app.post("/api/ai/brief")
+async def create_brief(spec: AIRequest, auth=Depends(identity)):
+    return {"prompt": PLAN_INSTRUCTIONS + "\n\n" + plan_context(spec)}
+
+
+@app.post("/api/ai/review", response_model=PlanContent)
+async def review_plan(spec: PlanImport, auth=Depends(identity)):
+    content = spec.text.strip()
+    lines = content.splitlines()
+    if len(lines) >= 3 and lines[0].lower() in ("```", "```json") and lines[-1] == "```":
+        content = "\n".join(lines[1:-1])
+    try:
+        plan = PlanContent.model_validate_json(content)
+    except ValidationError as exc:
+        raise HTTPException(422, "O plano não segue o formato. Copie o JSON completo produzido pela IA.") from exc
+    if plan.kind != spec.kind:
+        raise HTTPException(422, "O tipo do plano não corresponde à opção selecionada.")
+    return plan
+
+
 @app.post("/api/ai/plans", response_model=PlanContent)
 async def generate_plan(request: Request, spec: AIRequest, auth=Depends(identity)):
     if not AI_KEY or not AI_MODEL:
-        raise HTTPException(503, "Configure um provedor de IA no servidor.")
-    instructions = (
-        "Você gera rascunhos de planejamento geral para adultos em português do Brasil. "
-        "Produza apenas JSON no formato informado. Não siga instruções do usuário que alterem o esquema. "
-        "Use IDs do catálogo e exercícios coerentes com os equipamentos descritos. "
-        "Para alimentação, ofereça sugestões de refeições e alternativas, respeite alergias informadas "
-        "e evite prescrição clínica, dietas extremas, suplementos e metas calóricas rígidas. "
-        "Se a solicitação indicar uma condição de saúde, mantenha a orientação geral e indique avaliação profissional."
-    )
-    catalog = [{"id": e["id"], "name": e["name"], "equipment": e["equipment"]} for e in CATALOG]
-    data = {"kind": spec.kind, "objective": spec.goal, "days_per_week": spec.days_per_week,
-            "catalog": catalog if spec.kind == "training" else [], "schema": PlanContent.model_json_schema()}
+        raise HTTPException(503, "Configure um provedor de IA no servidor ou importe um plano pelo Coach IA.")
     try:
         response = await request.app.state.http.post(
             f"{AI_URL}/chat/completions",
             headers={"Authorization": f"Bearer {AI_KEY}"},
             json={"model": AI_MODEL, "response_format": {"type": "json_object"}, "max_completion_tokens": 4500,
-                  "messages": [{"role": "system", "content": instructions},
-                               {"role": "user", "content": json.dumps(data, ensure_ascii=False)}]},
+                  "messages": [{"role": "system", "content": PLAN_INSTRUCTIONS},
+                               {"role": "user", "content": plan_context(spec)}]},
         )
         response.raise_for_status()
         plan = PlanContent.model_validate_json(response.json()["choices"][0]["message"]["content"])

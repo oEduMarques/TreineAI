@@ -159,3 +159,56 @@ select{width:auto;max-width:100%}
 @media(max-width:470px){.routine-grid{grid-template-columns:1fr}.filters{grid-template-columns:repeat(2,minmax(0,1fr))}.search-input{grid-column:1/-1}.intro .button{padding:0 9px;font-size:.82rem}.hero-tag{font-size:.7rem}.stat-top svg{display:none}.history-volume{display:none}.workout-exercise .section-head{align-items:start}.week-grid strong{width:100%}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important}}
 .hero{background:linear-gradient(90deg,#131913 4%,#141b14e8 34%,#141b142b 78%),url(/gym-hero.jpg) center 47% / cover no-repeat}.hero:after{display:none}
+
+.session-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:12px}
+.session-metrics>div{display:grid;grid-template-columns:auto 1fr;column-gap:6px;align-items:center;padding:11px 15px;border-right:1px solid var(--line)}
+.session-metrics>div:last-child{border-right:0}
+.session-metrics span{font-size:.82rem;color:var(--muted)}
+.session-metrics svg{color:#536e28}
+.session-metrics strong{grid-column:1/-1;font-family:Manrope,system-ui,sans-serif;font-size:1.35rem;font-weight:800;font-variant-numeric:tabular-nums}
+.exercise-heading .inline{min-width:0;gap:10px}
+.exercise-heading small{display:block;margin-top:3px}
+.exercise-heading .item-icon{border:1px solid #dceabb}
+.exercise-complete{border-color:#a7c86a}
+.workout-notes summary{cursor:pointer;font-weight:700;font-size:.9rem;color:#43553a;min-height:40px;display:list-item;line-height:40px}
+.exercise-options{border-top:1px solid var(--line);margin-bottom:8px}
+.exercise-options-row{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.exercise-options-row .rest-setting{margin-bottom:0}
+.exercise-notes-input{display:grid;gap:4px;margin:5px 0 8px}
+.set-row.next-set{box-shadow:inset 3px 0 #91b736;background:#f0f6e6}
+.set-type{display:grid;gap:2px}
+.set-type select{font-size:.78rem;min-height:32px;padding:3px 5px;width:100%}
+.previous-button{display:inline-flex;align-items:center;gap:4px;max-width:max-content;min-height:32px;padding:0;border:0;background:transparent;color:#456218;font-size:.78rem;font-weight:800;text-align:left}
+.set-actions{display:flex;flex-direction:column;align-items:center}
+.check-set{background:#f0f3eb}
+.remove-set{min-height:32px}
+.workout-empty{margin-top:13px;display:grid;justify-items:start;gap:8px;padding-block:22px}
+.workout-empty>svg{color:#536e28}
+.session-timer{position:fixed;right:clamp(14px,4vw,55px);bottom:16px;box-shadow:0 8px 28px #111a1433}
+.editor-actions{padding-bottom:48px}
+.session-review p{margin-bottom:12px}
+.session-review .inline{justify-content:flex-end}
+.exercise-selected{background:#f1f7e6;border-radius:8px;padding-inline:5px}
+.exercise-picker-footer{position:sticky;bottom:-19px;display:flex;justify-content:space-between;align-items:center;gap:8px;background:#fff;border-top:1px solid var(--line);padding:9px 0;color:var(--muted)}
+.picker-dialog{max-height:85dvh}
+.starter-routines{margin-top:14px}
+.coach-login{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0}
+.coach-login .text-button{flex:none}
+.history-filters{display:flex;align-items:end;gap:9px;flex-wrap:wrap;margin-bottom:12px}
+.history-filters label{display:grid;gap:4px;min-width:120px}
+.history-filters label:first-child{flex:1;min-width:min(100%,210px)}
+.history-filters select{width:100%}
+.logged-notes{margin-top:6px;white-space:pre-wrap}
+.logged-exercise li small{color:var(--muted)}
+.exercise-video-frame{width:100%;aspect-ratio:16/9;border:0;border-radius:12px;background:#121815}
+@media(max-width:760px){
+  .session-timer{bottom:calc(68px + env(safe-area-inset-bottom))}
+  .exercise-picker-footer{bottom:-13px}
+  .session-metrics>div{padding:9px 10px}
+  .session-metrics strong{font-size:1.2rem}
+}
+@media(max-width:380px){
+  .set-row{grid-template-columns:minmax(80px,1fr) minmax(0,1.6fr) 42px}
+  .session-metrics>div{padding:7px 8px}
+  .session-metrics svg{width:14px}
+}

@@ -30,14 +30,15 @@ A API usa a chave publicável e o token do usuário. As políticas RLS filtram r
 
 Configure `AI_BASE_URL`, `AI_API_KEY` e `AI_MODEL` no servidor para conectar um provedor compatível com Chat Completions e saída `json_object`. A chave fica no backend. O objetivo escrito pelo usuário é enviado ao provedor. Planos de treino também recebem a lista de exercícios disponíveis.
 
-O Coach gera rascunhos de treino ou sugestões de refeições, valida a estrutura, exibe os detalhes antes de salvar e permite transformar um dia de treino salvo em uma rotina editável. A alimentação tem escopo de planejamento geral. O contrato OpenAPI fica em `/docs`.
+O Coach gera rascunhos de treino ou sugestões de refeições, valida a estrutura, exibe os detalhes antes de salvar e permite transformar um dia de treino salvo em uma rotina editável. A alimentação tem escopo de planejamento geral. Também é possível preparar um prompt no site, usar sua própria IA e importar a resposta para revisão sem configurar uma chave no TreineAI. O contrato OpenAPI fica em `/docs`.
 
 - `POST /api/ai/plans` recebe `kind`, `goal` e `days_per_week` e retorna um rascunho para revisão.
+- `POST /api/ai/brief` prepara um prompt com o mesmo objetivo e o formato esperado. `POST /api/ai/review` valida a resposta JSON colada pelo usuário.
 - `PUT /api/records/plan/{id}` salva um plano revisado e serve para importar um plano estruturado de outro cliente.
-- Ambos exigem o token Supabase da conta do usuário. A geração exige um provedor configurado.
+- As rotas exigem o token Supabase da conta do usuário. A geração direta exige um provedor configurado.
 
 ## Catálogo e vídeos
 
-O [catálogo inicial](data/exercises.json) referencia 14 exercícios verificados com o MCP do Hevy. Os nomes em português foram adaptados para o TreineAI. Os vídeos são do autor Goulart, via wger, sob CC BY-SA 4.0. Cada exercício mantém os links do vídeo original, da fonte e da licença. O catálogo inicial cobre os movimentos com demonstrações correspondentes encontradas nesta etapa.
+O [catálogo](data/exercises.json) referencia 29 exercícios verificados com o MCP do Hevy. Os nomes em português foram adaptados para o TreineAI. As demonstrações do wger têm crédito para Goulart e licença CC BY-SA 4.0. Os demais vídeos são exibidos no player oficial do YouTube, com crédito e link para o canal ou vídeo original.
 
 As cópias locais em `public/videos` foram transcodificadas para MP4/H.264 a 480p e mantêm a licença CC BY-SA 4.0. Para recriá-las, instale `imageio-ffmpeg` no ambiente de desenvolvimento e execute `python scripts/prepare_videos.py`.

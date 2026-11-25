@@ -6,8 +6,10 @@ export const exercises = Object.fromEntries(catalog.map(item => [item.id, item])
 export const muscles = {
   chest: 'Peito', lats: 'Dorsais', upper_back: 'Costas', shoulders: 'Ombros',
   biceps: 'Bíceps', quadriceps: 'Quadríceps', hamstrings: 'Posteriores', glutes: 'Glúteos',
+  triceps:'Tríceps', calves:'Panturrilhas', adductors:'Adutores', abdominals:'Abdômen', cardio:'Cardio',
 }
 export const equipment = { barbell: 'Barra', dumbbell: 'Halteres', machine: 'Máquina', none: 'Peso corporal' }
+export const setTypes = { normal:'Normal', warmup:'Aquecimento', failure:'Falha', dropset:'Drop set' }
 export const uid = () => crypto.randomUUID()
 export const blankSet = () => ({ reps: null, repsMax: null, weight: null, seconds: null, meters: null, done: false, type: 'normal' })
 export const blankExercise = id => ({ exerciseId: id, rest: 90, notes: '', sets: [blankSet(), blankSet(), blankSet()] })
@@ -31,8 +33,9 @@ export function numberValue(value) {
 }
 export function setLabel(set) {
   if (!set) return '—'
-  if (set.weight !== null && set.reps) return fmt(set.weight) + ' kg × ' + set.reps
+  if (Number.isFinite(set.weight) && set.reps) return fmt(set.weight) + ' kg × ' + set.reps
   if (set.reps) return set.reps + ' reps'
+  if (set.meters && set.seconds) return fmt(set.meters) + ' m · ' + set.seconds + ' s'
   if (set.seconds) return set.seconds + ' s'
   return '—'
 }

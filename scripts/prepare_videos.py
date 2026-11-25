@@ -43,9 +43,10 @@ def prepare(item):
 if __name__ == "__main__":
     OUTPUT.mkdir(parents=True, exist_ok=True)
     items = json.loads(CATALOG.read_text(encoding="utf-8"))
+    hosted = [item for item in items if not item.get("youtubeId")]
     with ThreadPoolExecutor(max_workers=4) as pool:
-        jobs = [pool.submit(prepare, item) for item in items]
-        for item, job in zip(items, jobs):
+        jobs = [pool.submit(prepare, item) for item in hosted]
+        for item, job in zip(hosted, jobs):
             try:
                 item["playback"] = "/videos/" + job.result()
                 print(item["name"], item["playback"], flush=True)
